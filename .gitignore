@@ -113,7 +113,6 @@ build/
 public/build/
 
 # Astro build output
-dist/
 .astro/
 
 # Vitest coverage directory
