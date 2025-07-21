@@ -110,7 +110,7 @@ export function initializeScene() {
     // Load the JPG background
     const loader = new THREE.TextureLoader();
     loader.load(
-        'public/HDR_blue_nebula.jpg',
+        'HDR_blue_nebula.jpg',
         function (texture) {
             texture.mapping = THREE.EquirectangularReflectionMapping;
             state.scene.background = texture;
@@ -120,7 +120,7 @@ export function initializeScene() {
             // Load UFO Model inside the texture callback
             const gltfLoader = new GLTFLoader();
             gltfLoader.load(
-                'public//bob_lazar_ufo.glb',
+                'bob_lazar_ufo.glb',
                 function (gltf) {
                     console.log("UFO model loaded successfully:", gltf);
                     state.lightSource = gltf.scene;

@@ -26,7 +26,7 @@ export function rebuildUI(callbacks = {}) {
     logoContainer.id = 'ui-logo-container';
     
     const logo = document.createElement('img');
-    logo.src = './public/logo_dark.png';
+    logo.src = './logo_dark.png';
     logo.id = 'ui-logo';
     logoContainer.appendChild(logo);
 
