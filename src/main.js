@@ -229,16 +229,15 @@ function playNoteForTile(tile, isUFO = false) {
         const targetFreq = findClosestFrequency(originalFreq, scaleFreqs);
         finalFreq = originalFreq + (targetFreq - originalFreq) * state.params.chordMagnetStrength;
     }
-    // Always add to zappedTiles for visuals
-    if (!state.zappedTiles.has(tile.uuid)) {
-        state.zappedTiles.set(tile.uuid, { startTime: clock.getElapsedTime(), frequency: finalFreq, noteTriggered: false });
-    }
-    // Only trigger noteOn if sound is enabled and not already triggered
-    const zap = state.zappedTiles.get(tile.uuid);
-    if (state.soundEnabled && zap && !zap.noteTriggered) {
+    
+    // Always trigger the visual zap effect.
+    state.zappedTiles.set(tile.uuid, { startTime: clock.getElapsedTime(), frequency: finalFreq });
+
+    // Only trigger the audio if sound is enabled.
+    if (state.soundEnabled) {
         noteOn(finalFreq, tile.uuid);
-        zap.noteTriggered = true;
     }
+
     // Light up NexusUI key (grid → keyboard sync)
     if (!suppressGridToKeyboard) {
         const midi = freqToMidi(finalFreq);
