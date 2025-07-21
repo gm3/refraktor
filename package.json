@@ -1,0 +1,30 @@
+{
+  "name": "refraktor",
+  "version": "1.0.0",
+  "description": "Interactive 3D Cymatics Experiment with Water Lens Refraction",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && gh-pages -d dist"
+  },
+  "dependencies": {
+    "dat.gui": "^0.7.9",
+    "three": "^0.158.0",
+    "tone": "^15.1.22"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.1.1",
+    "vite": "^5.0.0"
+  },
+  "keywords": [
+    "cymatics",
+    "3d",
+    "physics",
+    "visualization",
+    "threejs"
+  ],
+  "author": "Cymatics Experiment",
+  "license": "MIT"
+}
