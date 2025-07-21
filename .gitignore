@@ -92,9 +92,7 @@ out
 
 # Gatsby files
 .cache/
-# Comment in the public line in if your project uses Gatsby and not a traditional static site generator.
-# https://www.gatsbyjs.com/docs/how-to/version-control/best-practices-for-git/#the-public-directory
-# public
+
 
 # vuepress build output
 .vuepress/
@@ -109,7 +107,7 @@ build
 # Remix build output
 .cache/
 build/
-public/build/
+
 
 # Astro build output
 .astro/
