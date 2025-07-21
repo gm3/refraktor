@@ -392,3 +392,74 @@ button:hover {
 .status-message.note .message {
     color: #5f5;
 } 
+
+#keyboard-visualizer-footer {
+  position: fixed;
+  left: 50%;
+  bottom: 100px;
+  transform: translateX(-50%);
+  height: 56px;
+  z-index: 100;
+  background: rgba(10, 10, 10, 0.95);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border: 2px solid #00ff88;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 0 12px #00ff8844;
+  padding: 0 8px;
+  pointer-events: auto;
+  min-width: 360px;
+  max-width: 720px;
+}
+
+.kv-key {
+  flex: 1 0 0;
+  border: 2px solid #00ff88;
+  box-sizing: border-box;
+  position: relative;
+  transition: background 0.1s, box-shadow 0.1s;
+  margin: 0 1px;
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 1;
+}
+.kv-white {
+  background: #0a0a0a;
+  height: 48px;
+  z-index: 1;
+}
+.kv-black {
+  background: #111;
+  height: 28px;
+  width: 60%;
+  position: absolute;
+  left: 70%;
+  top: 0;
+  z-index: 2;
+  border: 2px solid #00ff88;
+  border-radius: 2px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.kv-active {
+  background: #00ff88 !important;
+  box-shadow: 0 0 12px #00ff88, 0 0 2px #00ff88;
+  border-color: #00ff88;
+} 
+
+.nexus-key-active {
+  fill: #00ff88 !important;
+  stroke: #00ff88 !important;
+  filter: drop-shadow(0 0 8px #00ff88);
+} 
+
+.mapped-key {
+  fill: #00ff88 !important;
+  stroke: #00ff88 !important;
+  filter: drop-shadow(0 0 8px #00ff88);
+}
+#mapped-range-line {
+  pointer-events: none;
+} 

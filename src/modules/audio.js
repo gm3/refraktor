@@ -9,7 +9,9 @@ let monoSynth;
 let filter;
 let distortion;
 let saturation;
+let reverb; // Reverb node
 let limiter;
+let analyser; // Analyser node for waveform visualization
 let isToneStarted = false;
 let player;
 
@@ -24,6 +26,7 @@ async function startTone() {
 function ensureFXDefaults() {
     if (!state.audio.distortion) state.audio.distortion = { enabled: false, amount: 0.2 };
     if (!state.audio.saturation) state.audio.saturation = { enabled: false, amount: 0.2 };
+    if (!state.audio.reverb) state.audio.reverb = { enabled: false, decay: 2, wet: 0.3 };
     if (!state.audio.limiter) state.audio.limiter = { enabled: true, threshold: -6 };
 }
 
@@ -37,23 +40,30 @@ function createFXChain() {
     distortion.wet.value = state.audio.distortion && state.audio.distortion.enabled ? 1 : 0;
     // Saturation (WaveShaper)
     const saturationAmount = (state.audio.saturation && typeof state.audio.saturation.amount === 'number') ? state.audio.saturation.amount : 0.2;
-    saturation = new Tone.WaveShaper(x => Math.tanh(saturationAmount * x));
+    saturation = new Tone.WaveShaper(makeSaturationCurve(saturationAmount));
     saturation.wet = state.audio.saturation && state.audio.saturation.enabled ? 1 : 0;
+    // Reverb
+    reverb = new Tone.Reverb({ decay: state.audio.reverb.decay });
+    reverb.wet.value = state.audio.reverb.enabled ? state.audio.reverb.wet : 0;
     // Limiter
     const limiterThreshold = (state.audio.limiter && typeof state.audio.limiter.threshold === 'number') ? state.audio.limiter.threshold : -6;
     limiter = new Tone.Limiter(limiterThreshold);
     limiter.wet = state.audio.limiter && state.audio.limiter.enabled ? 1 : 0;
-    // Chain: filter -> distortion -> saturation -> limiter -> destination
-    filter.chain(distortion, saturation, limiter, Tone.Destination);
+    // Analyser (for waveform visualization)
+    analyser = new Tone.Analyser('waveform', 1024);
+    // Chain: filter -> distortion -> saturation -> reverb -> limiter -> analyser -> destination
+    filter.chain(distortion, saturation, reverb, limiter, analyser, Tone.Destination);
 }
 
 function createSynths() {
-    if (synth) synth.dispose();
-    if (monoSynth) monoSynth.dispose();
+    // Dispose old synths and player
+    if (synth) { synth.releaseAll(); synth.dispose(); }
+    if (monoSynth) { monoSynth.triggerRelease(); monoSynth.dispose(); }
     if (player) player.dispose();
     createFXChain();
-    // PolySynth
+    // PolySynth with increased polyphony
     synth = new Tone.PolySynth(Tone.Synth, {
+        maxPolyphony: 32,
         oscillator: { type: state.audio.oscillatorType },
         envelope: {
             attack: state.audio.attack,
@@ -102,6 +112,26 @@ export async function toggleSound(enabled) {
     }
 }
 
+function noteToMidi(note) {
+    // e.g. 'C4' => 60
+    const match = note.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 60;
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const noteName = match[1];
+    const octave = parseInt(match[2], 10);
+    return NOTE_NAMES.indexOf(noteName) + (octave + 1) * 12;
+}
+
+// Helper to create a saturation curve
+function makeSaturationCurve(amount, len = 1024) {
+    const curve = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+        const x = (i * 2) / len - 1;
+        curve[i] = Math.tanh(amount * x);
+    }
+    return curve;
+}
+
 export function noteOn(frequency, tileId) {
     if (!state.soundEnabled) return;
     const src = state.audio.soundSource || 'synth';
@@ -113,6 +143,12 @@ export function noteOn(frequency, tileId) {
         synth.triggerAttack(frequency, undefined, 1);
     }
     if ((src === 'sample' || src === 'both') && player) {
+        // Sample pitch mapping
+        const sampleRoot = state.audio.sample?.rootNote || 'C4';
+        const rootMidi = noteToMidi(sampleRoot);
+        const targetMidi = Math.round(69 + 12 * Math.log2(frequency / 440));
+        const playbackRate = Math.pow(2, (targetMidi - rootMidi) / 12);
+        player.playbackRate = playbackRate;
         player.start();
     }
     sendNoteOn(frequency);
@@ -177,6 +213,43 @@ export function updateFilterQ(q) {
     }
 }
 
+export function updateDistortionAmount(amount) {
+    state.audio.distortion.amount = amount;
+    if (distortion) distortion.distortion = amount;
+}
+export function updateDistortionEnabled(enabled) {
+    state.audio.distortion.enabled = enabled;
+    if (distortion) distortion.wet.value = enabled ? 1 : 0;
+}
+export function updateSaturationAmount(amount) {
+    state.audio.saturation.amount = amount;
+    if (saturation) saturation.curve = makeSaturationCurve(amount);
+}
+export function updateSaturationEnabled(enabled) {
+    state.audio.saturation.enabled = enabled;
+    if (saturation) saturation.wet = enabled ? 1 : 0;
+}
+export function updateReverbDecay(decay) {
+    state.audio.reverb.decay = decay;
+    if (reverb) reverb.decay = decay;
+}
+export function updateReverbWet(wet) {
+    state.audio.reverb.wet = wet;
+    if (reverb) reverb.wet.value = wet;
+}
+export function updateReverbEnabled(enabled) {
+    state.audio.reverb.enabled = enabled;
+    if (reverb) reverb.wet.value = enabled ? state.audio.reverb.wet : 0;
+}
+export function updateLimiterThreshold(threshold) {
+    state.audio.limiter.threshold = threshold;
+    if (limiter) limiter.threshold.value = threshold;
+}
+export function updateLimiterEnabled(enabled) {
+    state.audio.limiter.enabled = enabled;
+    if (limiter) limiter.wet = enabled ? 1 : 0;
+}
+
 export function updateMasterVolume(volume) {
     state.audio.masterVolume = volume;
     if (synth) {
@@ -199,9 +272,14 @@ export function updateFXChain() {
     if (player) player.connect(Tone.Destination);
 }
 
+// Panic function to release all notes and reset synths
 export function panic() {
-    if (synth) {
-        synth.releaseAll();
-    }
+    if (synth) synth.releaseAll();
+    if (monoSynth) monoSynth.triggerRelease();
+}
+
+// Export analyser for waveform visualizer
+export function getWaveformAnalyser() {
+    return analyser;
 }
 

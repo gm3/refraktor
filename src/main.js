@@ -12,11 +12,99 @@ import { initializeStatusBar } from './modules/ui/statusBar.js';
 import { updateCymatics } from './modules/cymatics.js';
 import { updateUfoAndGetTiles } from './modules/ufo.js';
 import { updateRay } from './modules/raycaster.js';
+import Nexus from 'nexusui';
 
 const clock = new THREE.Clock();
 const mouse = new THREE.Vector2();
 const mouseRaycaster = new THREE.Raycaster();
 let isMouseDown = false;
+
+let piano = null;
+let suppressGridToKeyboard = false;
+let suppressKeyboardToGrid = false;
+
+function freqToMidi(freq) {
+    return Math.round(69 + 12 * Math.log2(freq / 440));
+}
+function midiToFreq(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function lightNexusKey(midi, state = true) {
+    // Find the SVG rect for the key by MIDI note
+    const keyIndex = midi - piano.settings.lowNote;
+    const svg = document.querySelector('#nexus-piano svg');
+    if (!svg) return;
+    // NexusUI renders white keys first, then black keys, so we need to find the right rect
+    // White keys: first N rects, black keys: after
+    // We'll highlight both if present
+    const rects = svg.querySelectorAll('rect');
+    if (rects[keyIndex]) {
+        if (state) {
+            rects[keyIndex].classList.add('nexus-key-active');
+        } else {
+            rects[keyIndex].classList.remove('nexus-key-active');
+        }
+    }
+}
+
+function lightGridPadByMidi(midi) {
+    const freq = midiToFreq(midi);
+    const tile = findTileByFrequency(freq);
+    if (tile) {
+        suppressKeyboardToGrid = true;
+        playNoteForTile(tile);
+        suppressKeyboardToGrid = false;
+    }
+}
+
+function highlightMappedKeysOnKeyboard() {
+    // Remove all previous highlights
+    const svg = document.querySelector('#nexus-piano svg');
+    if (!svg) return;
+    svg.querySelectorAll('.mapped-key').forEach(el => el.classList.remove('mapped-key'));
+    // Get all mapped MIDI notes from grid
+    const mappedMidis = state.gridTiles.map(tile => freqToMidi(tile.userData.frequency));
+    const rects = svg.querySelectorAll('rect');
+    mappedMidis.forEach(midi => {
+        const keyIndex = midi - piano.settings.lowNote;
+        if (rects[keyIndex]) {
+            rects[keyIndex].classList.add('mapped-key');
+        }
+    });
+    // Draw or update the mapped range line
+    drawMappedRangeLine(mappedMidis);
+}
+
+function drawMappedRangeLine(mappedMidis) {
+    // Remove old line
+    let lineDiv = document.getElementById('mapped-range-line');
+    if (lineDiv) lineDiv.remove();
+    if (!mappedMidis.length) return;
+    // Find min/max key index
+    const minMidi = Math.min(...mappedMidis);
+    const maxMidi = Math.max(...mappedMidis);
+    const keyWidth = 600 / (piano.settings.highNote - piano.settings.lowNote + 1);
+    const left = (minMidi - piano.settings.lowNote) * keyWidth;
+    const width = (maxMidi - minMidi + 1) * keyWidth;
+    // Create line div
+    lineDiv = document.createElement('div');
+    lineDiv.id = 'mapped-range-line';
+    lineDiv.style.position = 'absolute';
+    lineDiv.style.left = left + 'px';
+    lineDiv.style.top = '-8px';
+    lineDiv.style.width = width + 'px';
+    lineDiv.style.height = '4px';
+    lineDiv.style.background = '#00ff88';
+    lineDiv.style.borderRadius = '2px';
+    lineDiv.style.boxShadow = '0 0 8px #00ff88';
+    lineDiv.style.pointerEvents = 'none';
+    lineDiv.style.zIndex = 10;
+    // Position over the piano
+    const pianoDiv = document.getElementById('nexus-piano');
+    pianoDiv.style.position = 'relative';
+    pianoDiv.appendChild(lineDiv);
+}
 
 // --- Initialization ---
 
@@ -26,6 +114,40 @@ function init() {
     rebuildUI({ 
         onToggleSound: toggleSound,
         isSoundEnabled: () => state.soundEnabled,
+    });
+
+    // Add NexusUI Piano
+    let pianoFooter = document.getElementById('keyboard-visualizer-footer');
+    if (!pianoFooter) {
+        pianoFooter = document.createElement('div');
+        pianoFooter.id = 'keyboard-visualizer-footer';
+        document.body.appendChild(pianoFooter);
+    }
+    let nexusPianoDiv = document.getElementById('nexus-piano');
+    if (!nexusPianoDiv) {
+        nexusPianoDiv = document.createElement('div');
+        nexusPianoDiv.id = 'nexus-piano';
+        pianoFooter.appendChild(nexusPianoDiv);
+    }
+    // Initialize NexusUI Piano
+    piano = new Nexus.Piano('#nexus-piano', {
+        size: [600, 48],
+        mode: 'button',
+        lowNote: 36, // C2
+        highNote: 96, // C7 (5 octaves)
+    });
+    piano.on('change', v => {
+        if (v.state) {
+            if (!suppressKeyboardToGrid) {
+                lightGridPadByMidi(v.note);
+            }
+            const freq = midiToFreq(v.note);
+            noteOn(freq, 'nexus-' + v.note);
+            lightNexusKey(v.note, true);
+        } else {
+            noteOff('nexus-' + v.note);
+            lightNexusKey(v.note, false);
+        }
     });
 
     // Event Listeners
@@ -41,6 +163,15 @@ function init() {
 // --- Grid and Scene Management ---
 
 // The rebuildGrid function has been removed, as grid creation is now handled in scene.js
+
+// Patch grid rebuild to update keyboard highlights
+import { rebuildGrid as originalRebuildGrid } from './modules/scene.js';
+function rebuildGridAndHighlight() {
+    originalRebuildGrid();
+    setTimeout(highlightMappedKeysOnKeyboard, 50); // Wait for DOM update
+}
+// Replace all calls to rebuildGrid with rebuildGridAndHighlight
+window.rebuildGrid = rebuildGridAndHighlight;
 
 // --- Event Handlers ---
 
@@ -107,6 +238,15 @@ function playNoteForTile(tile, isUFO = false) {
     if (state.soundEnabled && zap && !zap.noteTriggered) {
         noteOn(finalFreq, tile.uuid);
         zap.noteTriggered = true;
+    }
+    // Light up NexusUI key (grid → keyboard sync)
+    if (!suppressGridToKeyboard) {
+        const midi = freqToMidi(finalFreq);
+        suppressGridToKeyboard = true;
+        lightNexusKey(midi, true);
+        // Remove highlight after zap duration
+        setTimeout(() => lightNexusKey(midi, false), state.tileZap?.duration ? state.tileZap.duration * 1000 : 400);
+        suppressGridToKeyboard = false;
     }
 }
 

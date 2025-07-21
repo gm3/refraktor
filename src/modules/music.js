@@ -1,77 +1,73 @@
-import * as Tone from 'tone';
-import { state } from './state';
+import { state } from './state.js';
+
+export const NOTES = {
+    'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 
+    'E': 329.63, 'F': 349.23, 'F#': 369.99, 'G': 392.00, 
+    'G#': 415.30, 'A': 440.00, 'A#': 466.16, 'B': 493.88
+};
+
+export const NOTE_NAMES = Object.keys(NOTES);
+
+export const SCALES = {
+    major: [0, 2, 4, 5, 7, 9, 11], // Major scale intervals
+    minor: [0, 2, 3, 5, 7, 8, 10], // Natural minor scale intervals
+    pentatonicMajor: [0, 2, 4, 7, 9],
+    pentatonicMinor: [0, 3, 5, 7, 10],
+};
+
+export const CHORDS = {
+    major: [0, 4, 7], // Major triad
+    minor: [0, 3, 7], // Minor triad
+    diminished: [0, 3, 6],
+    augmented: [0, 4, 8],
+};
 
 /**
- * Updates the global state with a pre-calculated array of frequencies for the current musical scale.
- * This should be called whenever the root note, scale, or octave range changes.
+ * Gets the frequencies for a given scale.
+ * @param {string} rootNote - E.g., 'C', 'F#'.
+ * @param {string} scaleName - E.g., 'major', 'minor'.
+ * @param {number} octaves - Number of octaves to generate.
+ * @returns {number[]} - Array of frequencies.
  */
-export function updateMusicScale() {
-    state.music.scaleFrequencies = getScaleFrequencies(
-        state.music.rootNote,
-        state.music.scale,
-        state.music.octaves
-    );
-}
+export function getScaleFrequencies(rootNote = 'C', scaleName = 'major', octaves = 4) {
+    const scaleIntervals = SCALES[scaleName];
+    if (!scaleIntervals) throw new Error(`Scale '${scaleName}' not found.`);
 
-
-/**
- * Generates an array of frequencies for a given scale, root note, and octave range.
- * @param {string} rootNote - The root note (e.g., 'C', 'G#').
- * @param {string} scale - The scale name (e.g., 'major', 'minor').
- * @param {number} octaveRange - The number of octaves to generate.
- * @returns {number[]} An array of frequencies.
- */
-export function getScaleFrequencies(rootNote, scale, octaveRange) {
-    const scaleType = scales[scale];
-    if (!scaleType) {
-        console.warn(`Scale '${scale}' not found.`);
-        return [];
-    }
+    const rootNoteIndex = NOTE_NAMES.indexOf(rootNote);
+    if (rootNoteIndex === -1) throw new Error(`Root note '${rootNote}' not found.`);
 
     const frequencies = [];
-    const rootMidi = Tone.Frequency(rootNote).toMidi();
-
-    for (let octave = 0; octave < octaveRange; octave++) {
-        scaleType.forEach(interval => {
-            const midiNote = rootMidi + (octave * 12) + interval;
-            if (midiNote <= 127) { // Ensure it's a valid MIDI note
-                frequencies.push(Tone.Frequency(midiNote, 'midi').toFrequency());
-            }
-        });
+    for (let o = 0; o < octaves; o++) {
+        for (const interval of scaleIntervals) {
+            const noteIndex = (rootNoteIndex + interval) % 12;
+            const noteName = NOTE_NAMES[noteIndex];
+            const octaveMultiplier = Math.pow(2, o + Math.floor((rootNoteIndex + interval) / 12));
+            frequencies.push(NOTES[noteName] * octaveMultiplier);
+        }
     }
-    // Add the highest note of the scale, one octave up, to cap the range.
-    const topNote = rootMidi + (octaveRange * 12);
-    if (topNote <= 127) {
-        frequencies.push(Tone.Frequency(topNote, 'midi').toFrequency());
-    }
-
-
-    return frequencies.sort((a, b) => a - b);
+    return frequencies;
 }
 
 /**
- * Finds the frequency in the scale that is closest to the given frequency.
+ * Finds the closest frequency in a given list of frequencies.
  * @param {number} targetFreq - The frequency to match.
  * @param {number[]} freqList - The list of frequencies to search in.
- * @returns {number} The closest frequency from the list.
+ * @returns {number} - The closest frequency from the list.
  */
 export function findClosestFrequency(targetFreq, freqList) {
-    if (!freqList || freqList.length === 0) {
-        // Return the original frequency if the list is invalid, to avoid breaking playback.
-        return targetFreq;
-    }
     return freqList.reduce((prev, curr) => {
         return (Math.abs(curr - targetFreq) < Math.abs(prev - targetFreq) ? curr : prev);
     });
-}
+} 
 
 /**
- * A mapping of scale names to their intervals in semitones from the root.
+ * Updates the global state with a pre-calculated array of frequencies for the current musical scale.
+ * Should be called whenever the root note, scale, or octave range changes.
  */
-export const scales = {
-    'major': [0, 2, 4, 5, 7, 9, 11],
-    'minor': [0, 2, 3, 5, 7, 8, 10],
-    'pentatonic': [0, 2, 4, 7, 9],
-    'blues': [0, 3, 5, 6, 7, 10],
-    'chromatic': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-}; 
+export function updateMusicScale() {
+    if (!state.music) state.music = {};
+    const root = state.music.rootNote || 'C';
+    const scale = state.music.scale || 'major';
+    const octaves = state.music.octaves || 4;
+    state.music.scaleFrequencies = getScaleFrequencies(root, scale, octaves);
+} 

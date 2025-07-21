@@ -6,7 +6,6 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 // import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'; 
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { state } from './state.js';
 import { config } from './config.js';
@@ -26,16 +25,16 @@ export function initializeScene() {
 
     // Post-processing
     const renderScene = new RenderPass(state.scene, state.camera);
-    state.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    state.bloomPass.threshold = state.bloomParams.threshold;
-    state.bloomPass.strength = state.bloomParams.strength;
-    state.bloomPass.radius = state.bloomParams.radius;
+    // state.bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85); // REMOVE
+    // state.bloomPass.threshold = state.bloomParams.threshold;
+    // state.bloomPass.strength = state.bloomParams.strength;
+    // state.bloomPass.radius = state.bloomParams.radius;
 
     const smaaPass = new SMAAPass( window.innerWidth * state.renderer.getPixelRatio(), window.innerHeight * state.renderer.getPixelRatio() );
 
     state.composer = new EffectComposer(state.renderer);
     state.composer.addPass(renderScene);
-    state.composer.addPass(state.bloomPass);
+    // state.composer.addPass(state.bloomPass); // REMOVE
     state.composer.addPass(smaaPass);
 
 
@@ -176,12 +175,6 @@ export function initializeScene() {
     );
 }
 
-export function updateBloom() {
-    state.bloomPass.threshold = state.bloomParams.threshold;
-    state.bloomPass.strength = state.bloomParams.strength;
-    state.bloomPass.radius = state.bloomParams.radius;
-}
-
 export function addOrRemoveLens2() {
     if (state.lens2) {
         // Remove existing lens2
@@ -209,4 +202,55 @@ export function addOrRemoveLens2() {
         state.scene.add(state.lens2);
         return true;
     }
+} 
+
+export function rebuildGrid() {
+    // Remove old tiles
+    if (state.gridTiles && state.gridTiles.length) {
+        for (const tile of state.gridTiles) {
+            try {
+                state.scene.remove(tile);
+                tile.geometry.dispose();
+                tile.material.dispose();
+            } catch (e) {
+                console.warn('Failed to fully dispose tile:', tile, e);
+            }
+        }
+    }
+    state.gridTiles = [];
+    // Remove any leftover Meshes at y = groundY and rotation.x = -Math.PI/2 (paranoia)
+    const { groundY } = config.scene;
+    state.scene.traverse(obj => {
+        if (obj.isMesh && obj.position.y === groundY && obj.rotation.x === -Math.PI / 2) {
+            state.scene.remove(obj);
+        }
+    });
+    // Get current scale frequencies
+    const scaleFreqs = (state.music && state.music.scaleFrequencies) ? state.music.scaleFrequencies : [];
+    const numTiles = scaleFreqs.length;
+    const { gridSize } = config.scene;
+    // Make a single row of tiles for each note in the scale/octave range
+    const tileSize = gridSize / Math.max(numTiles, 1);
+    for (let i = 0; i < numTiles; i++) {
+        const tileGeo = new THREE.PlaneGeometry(tileSize, tileSize);
+        const baseColor = new THREE.Color(0x222244);
+        const tileMat = new THREE.MeshStandardMaterial({
+            color: baseColor,
+            emissive: 0x000000,
+            emissiveIntensity: 0,
+            transparent: true,
+            opacity: 0.5
+        });
+        const tile = new THREE.Mesh(tileGeo, tileMat);
+        tile.position.x = -gridSize / 2 + tileSize / 2 + i * tileSize;
+        tile.position.z = 0;
+        tile.position.y = groundY;
+        tile.rotation.x = -Math.PI / 2;
+        tile.userData.frequency = scaleFreqs[i];
+        tile.userData.baseColor = baseColor;
+        tile.userData.hotColor = new THREE.Color(0xffff00);
+        state.scene.add(tile);
+        state.gridTiles.push(tile);
+    }
+    console.log('Grid rebuilt. Number of tiles:', state.gridTiles.length);
 } 
