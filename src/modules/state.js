@@ -17,6 +17,7 @@ export const state = {
     chordMagnetStrength: config.music.chordMagnetStrength,
     rootNote: config.music.rootNote,
     scale: config.music.scale,
+    octaveOffset: 0, // Octave shift for grid mapping (0 = default)
   },
   bloomParams: {
     enabled: config.bloom.enabled,
