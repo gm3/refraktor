@@ -86,7 +86,6 @@ out
 
 # Nuxt.js build output
 .nuxt
-dist
 
 # Nuxt.js generated files
 .output
@@ -98,7 +97,7 @@ dist
 # public
 
 # vuepress build output
-.vuepress/dist
+.vuepress/
 
 # SvelteKit build output
 .svelte-kit
